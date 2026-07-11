@@ -3,6 +3,7 @@
 ;;; Code:
 
 (require 's)
+(require 'seq)
 
 (require 'kubernetes-ast)
 (require 'kubernetes-state)
