@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: heartbeat
+  namespace: kubernetes-el-demo
+spec:
+  schedule: "*/1 * * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: heartbeat
+              image: busybox:1.36
+              command: ["sh", "-c"]
+              args:
+                - |
+                  echo "heartbeat at $(date -Iseconds)"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: flaky-cron
+  namespace: kubernetes-el-demo
+  labels:
+    scenario: failing-cron
+spec:
+  schedule: "*/2 * * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: flaky
+              image: busybox:1.36
+              command: ["sh", "-c"]
+              args:
+                - |
+                  echo "flaky-cron running at $(date -Iseconds)";
+                  echo "intentional failure for kubernetes-el demo";
+                  exit 1

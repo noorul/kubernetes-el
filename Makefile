@@ -14,14 +14,23 @@ TARGETS = $(SRCS:.el=.elc)
 MAIN_PACKAGE_FILE = kubernetes.el
 EVIL_PACKAGE_FILE = kubernetes-evil.el
 
-VERSION := $(shell EMACS=${EMACS} ${CASK} version)
+VERSION := $(shell EMACS=${EMACS} ${CASK} version 2>/dev/null)
 TAR     := dist/kubernetes-$(VERSION).tar
+
+KIND            ?= kind
+KUBECTL         ?= kubectl
+KIND_CLUSTER    ?= kubernetes-el
+KIND_CONFIG     ?= dev/kind-config.yaml
+KIND_MANIFESTS  ?= dev/manifests
+KIND_CONTEXT    := kind-$(KIND_CLUSTER)
+KIND_NAMESPACE  ?= kubernetes-el-demo
 
 
 
 .PHONY: build dist install help test clean clean-all release \
 	set-package-version assert-on-master assert-clean-worktree \
-	git-release github-browse-release
+	git-release github-browse-release \
+	kind-up kind-seed kind-reset kind-down kind-context
 
 
 #: Compile Lisp files
@@ -118,6 +127,42 @@ $(CASKDIR) :
 	${CASK} install
 
 
+#: Create a local kind cluster for exercising kubernetes-el interactively
+kind-up :
+	@if ! command -v $(KIND) >/dev/null 2>&1; then \
+		echo "kind is not installed. See https://kind.sigs.k8s.io/"; exit 1; \
+	fi
+	@if ! command -v $(KUBECTL) >/dev/null 2>&1; then \
+		echo "kubectl is not installed."; exit 1; \
+	fi
+	@if $(KIND) get clusters 2>/dev/null | grep -qx "$(KIND_CLUSTER)"; then \
+		echo "kind cluster '$(KIND_CLUSTER)' already exists — skipping create."; \
+	else \
+		$(KIND) create cluster --name $(KIND_CLUSTER) --config $(KIND_CONFIG); \
+	fi
+	$(KUBECTL) --context $(KIND_CONTEXT) cluster-info
+
+#: Apply demo manifests covering every resource kind kubernetes-el renders
+kind-seed :
+	$(KUBECTL) --context $(KIND_CONTEXT) apply -f $(KIND_MANIFESTS)
+	@echo
+	@echo "Seeded namespace: $(KIND_NAMESPACE)"
+	@echo "Point Emacs at context '$(KIND_CONTEXT)' and run M-x kubernetes-overview."
+
+#: Delete then re-apply the seed manifests
+kind-reset :
+	-$(KUBECTL) --context $(KIND_CONTEXT) delete -f $(KIND_MANIFESTS) --ignore-not-found
+	$(MAKE) kind-seed
+
+#: Print the kubectl context created by kind-up
+kind-context :
+	@echo $(KIND_CONTEXT)
+
+#: Delete the local kind cluster
+kind-down :
+	-$(KIND) delete cluster --name $(KIND_CLUSTER)
+
+
 $(DEPS_PNG) : $(DEPS_SCRIPT) $(SRCS)
 	$(EMACS_BATCH) -f package-initialize -l $(DEPS_SCRIPT) -f project-deps-generate
 
@@ -127,8 +172,14 @@ autoloads:
 
 
 
-# Assert cask is installed
+# Assert cask is installed (skipped for kind-* targets, which don't need it)
 
+CASK_REQUIRED := yes
+ifneq (,$(filter kind-%,$(MAKECMDGOALS)))
+CASK_REQUIRED := no
+endif
+
+ifeq ($(CASK_REQUIRED),yes)
 ifeq (, $(shell which cask))
 
 define MESSAGE
@@ -147,4 +198,5 @@ macOS:
 endef
 
 $(error $(MESSAGE))
+endif
 endif

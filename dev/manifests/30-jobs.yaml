@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hello-job
+  namespace: kubernetes-el-demo
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: hello
+          image: busybox:1.36
+          command: ["sh", "-c"]
+          args:
+            - |
+              echo "hello from kubernetes-el hello-job";
+              for i in 1 2 3 4 5; do echo "step $i"; sleep 1; done;
+              echo "done"

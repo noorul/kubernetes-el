@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: kubernetes-el-demo
+  labels:
+    app: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          envFrom:
+            - configMapRef:
+                name: app-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: password
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crashloop-app
+  namespace: kubernetes-el-demo
+  labels:
+    app: crashloop-app
+    scenario: crashloop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crashloop-app
+  template:
+    metadata:
+      labels:
+        app: crashloop-app
+        scenario: crashloop
+    spec:
+      containers:
+        - name: broken
+          image: busybox:1.36
+          command: ["sh", "-c"]
+          args:
+            - |
+              echo "starting broken container at $(date)";
+              sleep 2;
+              echo "intentional exit for kubernetes-el CrashLoopBackOff demo";
+              exit 1
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
